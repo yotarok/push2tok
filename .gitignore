@@ -1,0 +1,13 @@
+/target/
+/dist/
+/.venv*/
+/.cargo-home/
+/.uv-cache/
+/.uv-tools/
+/.uv-bin/
+__pycache__/
+*.py[cod]
+*.egg-info/
+python/push2tok/*.so
+python/push2tok/*.pyd
+python/push2tok/*.dylib

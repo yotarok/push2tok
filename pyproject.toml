@@ -1,0 +1,24 @@
+[build-system]
+requires = ["maturin>=1.8,<2"]
+build-backend = "maturin"
+
+[project]
+name = "push2tok"
+version = "0.1.0"
+description = "Streaming byte-to-token transduction with deterministic finite-state transducers"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Typing :: Typed",
+]
+license = "MIT"
+
+[project.scripts]
+push2tok = "push2tok.cli:main"
+
+[tool.maturin]
+module-name = "push2tok._native"
+python-source = "python"
+exclude = ["**/__pycache__/**", "**/*.pyc", "dist/**"]
