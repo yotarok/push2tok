@@ -20,6 +20,11 @@ license-files = ["LICENSE"]
 [project.scripts]
 push2tok = "push2tok.cli:main"
 
+[project.urls]
+Homepage = "https://github.com/yotarok/push2tok"
+Repository = "https://github.com/yotarok/push2tok"
+Issues = "https://github.com/yotarok/push2tok/issues"
+
 [tool.maturin]
 module-name = "push2tok._native"
 python-source = "python"
