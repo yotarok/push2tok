@@ -1,9 +1,11 @@
 [package]
 name = "push2tok"
 version = "0.1.0"
+authors = ["Yotaro KUBO"]
 description = "Streaming byte-to-token transduction with deterministic finite-state transducers"
 readme = "README.md"
-exclude = ["dist/**", "python/**/__pycache__/**", "**/*.pyc", "python/**/*.so", "python/**/*.pyd", "python/**/*.dylib"]
+license = "MIT"
+exclude = ["dist/**", ".ponsu/**", "README.for_agents.md", "python/**/__pycache__/**", "**/*.pyc", "python/**/*.so", "python/**/*.pyd", "python/**/*.dylib"]
 edition = "2021"
 rust-version = "1.83"
 

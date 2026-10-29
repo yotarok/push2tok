@@ -7,6 +7,7 @@ name = "push2tok"
 version = "0.1.0"
 description = "Streaming byte-to-token transduction with deterministic finite-state transducers"
 readme = "README.md"
+authors = [{ name = "Yotaro KUBO" }]
 requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -14,6 +15,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 license = "MIT"
+license-files = ["LICENSE"]
 
 [project.scripts]
 push2tok = "push2tok.cli:main"
@@ -21,4 +23,4 @@ push2tok = "push2tok.cli:main"
 [tool.maturin]
 module-name = "push2tok._native"
 python-source = "python"
-exclude = ["**/__pycache__/**", "**/*.pyc", "dist/**"]
+exclude = ["**/__pycache__/**", "**/*.pyc", "dist/**", ".pon*/**", "README.for_agents.md"]
