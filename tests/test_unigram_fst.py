@@ -19,8 +19,8 @@ except ImportError:
 
 if spm is not None:
     from push2tok import BeamFST
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
-    from build_unigram_fst import compile_text, load_model
+    from push2tok._native import convert_unigram_fst, encode_unigram_fst
+    from push2tok.importer.rinna import compile_text, load_model
 
 
 @unittest.skipIf(spm is None, "install sentencepiece and protobuf for generator tests")
@@ -114,6 +114,42 @@ class UnigramBuilderTests(unittest.TestCase):
                     output += stream.finish()
                     self.assertEqual(output, expected)
 
+    def test_packaged_importer_without_rust(self):
+        env = os.environ.copy()
+        env["PATH"] = ""  # no cargo/rustc available to the child process
+        binary = self.directory / "model.fst"
+        result = subprocess.run(
+            [sys.executable, "-m", "push2tok.importer.rinna", "--model",
+             str(self.model_path), "--output", str(binary), "--sample", "ab"],
+            cwd=self.directory, env=env, capture_output=True, text=True, check=True,
+        )
+        self.assertIn("verification OK", result.stdout)
+        metadata = json.loads(Path(str(binary) + ".json").read_text())
+        self.assertEqual(metadata["format"], "binary")
+        self.assertTrue(metadata["push_labels"])
+        self.assertEqual(Path(str(binary) + ".spiece.model").read_bytes(),
+                         self.model_path.read_bytes())
+        self.assertGreater(metadata["states"], 10)
+        for sample in ("", "ab", "axyb", "あ😀😀b"):
+            normalized = self.processor.normalize(sample)
+            self.assertEqual(encode_unigram_fst(binary, normalized),
+                             self.processor.encode(sample))
+
+        plain = self.directory / "plain.txt"
+        subprocess.run(
+            [sys.executable, "-m", "push2tok.importer.rinna", "--model",
+             str(self.model_path), str(plain), "--format", "text",
+             "--no-push-labels", "--no-verify"],
+            cwd=self.directory, env=env, capture_output=True, text=True, check=True,
+        )
+        self.assertFalse(json.loads(Path(str(plain) + ".json").read_text())["push_labels"])
+        self.assertEqual(BeamFST.from_file(plain, format="text").transduce(b"ab"),
+                         self.processor.encode("ab"))
+
+    def test_native_convert_rejects_invalid_format(self):
+        with self.assertRaisesRegex(ValueError, "format must be"):
+            convert_unigram_fst(self.model_path, self.directory / "x", format="invalid")
+
     @unittest.skipUnless(os.environ.get("PUSH2TOK_TEST_BINARY"),
                          "set PUSH2TOK_TEST_BINARY=1 for the rustfst integration test")
     def test_rustfst_binary_shortest_path(self):
@@ -150,37 +186,21 @@ class UnigramBuilderTests(unittest.TestCase):
                 self.assertEqual(pushed_fst.transduce(normalized.encode(), beam_width=30), expected)
                 self.assertEqual(pushed_text_fst.transduce(normalized.encode(), beam_width=30), expected)
 
-    @unittest.skipUnless(os.environ.get("PUSH2TOK_TEST_BINARY"),
-                         "set PUSH2TOK_TEST_BINARY=1 for the builder/wrapper integration test")
-    def test_builder_and_wrapper_enable_label_pushing(self):
-        root = Path(__file__).resolve().parent.parent
-        cargo = shutil.which("cargo") or str(Path.home() / ".cargo/bin/cargo")
-        if not Path(cargo).exists():
-            self.skipTest("cargo is required")
-        env = os.environ.copy()
-        env.setdefault("CARGO_HOME", str(root / ".cargo-home"))
-        env["PATH"] = str(Path(cargo).parent) + os.pathsep + env.get("PATH", "")
-        text = self.directory / "builder-pushed.txt"
+    def test_importer_pushes_labels_in_text_format_by_default(self):
+        text = self.directory / "pushed.txt"
         subprocess.run(
-            [sys.executable, str(root / "tools/build_unigram_fst.py"),
-             "--model", str(self.model_path), "--output", str(text),
-             "--format", "text", "--push-labels"],
-            cwd=root, env=env, capture_output=True, text=True, check=True,
+            [sys.executable, "-m", "push2tok.importer.rinna", "--model",
+             str(self.model_path), "--output", str(text), "--format", "text"],
+            cwd=self.directory, capture_output=True, text=True, check=True,
         )
-        self.assertTrue(json.loads(Path(str(text) + ".json").read_text())["push_labels"])
-        self.assertEqual(BeamFST.from_file(text, format="text").transduce(b"ab"),
-                         self.processor.encode("ab"))
-
-        binary = self.directory / "wrapper-pushed.fst"
-        env.update(MODEL=str(self.model_path), VENV=sys.prefix, SAMPLE="ab", VERIFY="1")
-        env.pop("PUSH_LABELS", None)
-        subprocess.run(
-            [str(root / "tools/convert_rinna.sh"), str(binary)],
-            cwd=root, env=env, capture_output=True, text=True, check=True,
-        )
-        self.assertTrue(json.loads(Path(str(binary) + ".json").read_text())["push_labels"])
-        self.assertEqual(BeamFST.from_file(binary).transduce(b"ab"),
-                         self.processor.encode("ab"))
+        metadata = json.loads(Path(str(text) + ".json").read_text())
+        self.assertEqual(metadata["format"], "text")
+        self.assertTrue(metadata["push_labels"])
+        fst = BeamFST.from_file(text, format="text")
+        for sample in ("", "ab", "axyb", "あ😀😀b"):
+            with self.subTest(sample=sample):
+                data = self.processor.normalize(sample).encode("utf-8")
+                self.assertEqual(fst.transduce(data), self.processor.encode(sample))
 
 
 if __name__ == "__main__":

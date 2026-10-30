@@ -12,14 +12,14 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
-import subprocess
 import tempfile
 from urllib.request import urlopen
 
+import sentencepiece as spm
 from sentencepiece import sentencepiece_model_pb2 as pb
 
+from push2tok._native import convert_unigram_fst, encode_unigram_fst
 
-ROOT = Path(__file__).resolve().parent.parent
 REVISION = "8ce2399c33e99013a593ea9389378fd86662b9c7"
 URL = f"https://huggingface.co/rinna/japanese-gpt2-medium/resolve/{REVISION}/spiece.model"
 SHA256 = "b5cbdfa8aa7c54c8c5af85b78c309c54a5f2749a20468bf6f60eee007fe6fec1"
@@ -177,19 +177,12 @@ def build(args):
         else:
             model_path = args.model.resolve()
         model = load_model(model_path)
-        push_labels = getattr(args, "push_labels", False)
+        push_labels = args.push_labels
         text_path = output if args.format == "text" and not push_labels else Path(temp) / "model.txt"
         states, arcs = compile_text(model, text_path)
         if args.format == "binary" or push_labels:
-            command = (
-                ["cargo", "run", "--release", "--quiet", "--bin", "unigram_fst", "--",
-                 "convert", str(text_path), str(output), "--output-format", args.format]
-            )
-            if push_labels:
-                command.append("--push-labels")
-            result = subprocess.run(command, cwd=ROOT, check=True, capture_output=True, text=True)
-            converted = json.loads(result.stdout)
-            states, arcs = converted["states"], converted["arcs"]
+            states, arcs = convert_unigram_fst(
+                text_path, output, push_labels=push_labels, format=args.format)
         sidecar = Path(str(output) + ".spiece.model")
         if model_path != sidecar:
             shutil.copyfile(model_path, sidecar)
@@ -209,16 +202,36 @@ def build(args):
         Path(str(output) + ".json").write_text(
             json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {output} ({states} states, {arcs} arcs); normalizer: {sidecar}")
+    if args.verify and args.format == "binary":
+        sp = spm.SentencePieceProcessor(model_file=str(sidecar))
+        got = encode_unigram_fst(output, sp.normalize(args.sample))
+        want = sp.encode(args.sample)
+        print("text         :", args.sample)
+        print("sentencepiece:", want)
+        print("fst          :", got)
+        if got != want:
+            raise ValueError("verification failed: outputs differ")
+        print("verification OK")
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, help="local spiece.model (defaults to pinned rinna download)")
-    parser.add_argument("--output", required=True, type=Path, help="output FST path")
+    parser.add_argument("output", nargs="?", type=Path, help="output FST path")
+    parser.add_argument("--output", dest="output_option", type=Path, help="output FST path")
     parser.add_argument("--format", choices=("binary", "text"), default="binary")
-    parser.add_argument("--push-labels", action="store_true",
-                        help="use rustfst to push output labels toward the start state")
-    build(parser.parse_args())
+    parser.add_argument("--push-labels", action=argparse.BooleanOptionalAction, default=True,
+                        help="push output labels toward the start state (default: enabled)")
+    parser.add_argument("--verify", action=argparse.BooleanOptionalAction, default=True,
+                        help="compare the binary FST with SentencePiece (default: enabled)")
+    parser.add_argument("--sample", default="吾輩は猫である。名前はまだ無い。",
+                        help="text used to verify the binary FST")
+    args = parser.parse_args(argv)
+    if args.output and args.output_option:
+        parser.error("specify either output or --output, not both")
+    args.output = args.output_option or args.output or Path(
+        "dist/rinna-japanese-gpt2-medium.unigram.fst")
+    build(args)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 mod beam;
+mod unigram;
 
 use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -580,11 +581,44 @@ impl Stream {
     }
 }
 
+/// Convert an AT&T text FST to rustfst binary (or text), optionally pushing labels.
+#[pyfunction]
+#[pyo3(signature = (source, target, *, push_labels=false, format="binary"))]
+fn convert_unigram_fst(
+    source: &Bound<'_, PyAny>,
+    target: &Bound<'_, PyAny>,
+    push_labels: bool,
+    format: &str,
+) -> PyResult<(usize, usize)> {
+    if !matches!(format, "binary" | "text") {
+        return Err(PyValueError::new_err("format must be 'binary' or 'text'"));
+    }
+    let os = source.py().import("os")?;
+    let source: String = os.getattr("fspath")?.call1((source,))?.extract()?;
+    let target: String = os.getattr("fspath")?.call1((target,))?.extract()?;
+    unigram::convert(&source, &target, push_labels, format == "text")
+        .map_err(|err| PyOSError::new_err(err.to_string()))
+}
+
+/// Return the best token IDs for an already-normalized string and binary FST.
+#[pyfunction]
+fn encode_unigram_fst(path: &Bound<'_, PyAny>, normalized: &str) -> PyResult<Vec<Label>> {
+    let path: String = path
+        .py()
+        .import("os")?
+        .getattr("fspath")?
+        .call1((path,))?
+        .extract()?;
+    unigram::encode(&path, normalized).map_err(|err| PyValueError::new_err(err.to_string()))
+}
+
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Fst>()?;
     m.add_class::<Stream>()?;
     m.add_class::<beam::BeamFst>()?;
     m.add_class::<beam::BeamStream>()?;
+    m.add_function(wrap_pyfunction!(convert_unigram_fst, m)?)?;
+    m.add_function(wrap_pyfunction!(encode_unigram_fst, m)?)?;
     Ok(())
 }

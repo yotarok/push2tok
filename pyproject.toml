@@ -9,6 +9,7 @@ description = "Streaming byte-to-token transduction with deterministic finite-st
 readme = "README.md"
 authors = [{ name = "Yotaro KUBO" }]
 requires-python = ">=3.9"
+dependencies = ["sentencepiece", "protobuf"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Rust",
@@ -29,3 +30,13 @@ Issues = "https://github.com/yotarok/push2tok/issues"
 module-name = "push2tok._native"
 python-source = "python"
 exclude = ["**/__pycache__/**", "**/*.pyc", "dist/**", ".pon*/**", "README.for_agents.md"]
+
+[tool.uv]
+# Rebuild the native extension on `uv sync` / `uv run` when Rust sources change.
+# (Python sources under python/ are installed editable and need no rebuild.)
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "Cargo.lock" },
+    { file = "src/**/*.rs" },
+]

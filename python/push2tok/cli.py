@@ -21,7 +21,7 @@ def _parser() -> argparse.ArgumentParser:
         ),
         epilog=(
             "Input is fed to the FST as raw bytes. For SentencePiece-derived FSTs "
-            "(e.g. tools/convert_rinna.sh output), stdin must already be normalized "
+            "(e.g. python -m push2tok.importer.rinna output), stdin must already be normalized "
             "with the accompanying .spiece.model."
         ),
     )

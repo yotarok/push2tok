@@ -1,6 +1,12 @@
 from os import PathLike
 from typing import Literal
 
+def convert_unigram_fst(
+    source: str | PathLike[str], target: str | PathLike[str], *,
+    push_labels: bool = False, format: Literal["binary", "text"] = "binary"
+) -> tuple[int, int]: ...
+def encode_unigram_fst(path: str | PathLike[str], normalized: str) -> list[int]: ...
+
 class FST:
     def __init__(
         self,

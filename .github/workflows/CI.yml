@@ -171,26 +171,39 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@v7
       - uses: actions/download-artifact@v7
         with:
           name: wheels-linux-${{ matrix.target }}
           path: dist
       - name: Install the built wheel (never the source tree)
-        run: python -m pip install --no-index --find-links dist push2tok
-      - name: Install optional test dependencies
-        # The SentencePiece builder tests are skipped if these are unavailable.
-        run: python -m pip install sentencepiece protobuf || echo "::warning::sentencepiece unavailable; builder tests will be skipped"
+        run: uv pip install --python "$(command -v python)" dist/push2tok-*.whl
       - name: Run tests
         run: |
           python -c "import push2tok, sys; print(push2tok.__file__); sys.exit('site-packages' not in push2tok.__file__)"
           push2tok --help
           python -m unittest discover -s tests -v
 
+  test-dev:
+    name: uv editable install and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v7
+      - name: Install editable extension and locked dependencies
+        run: uv sync --locked
+      - name: Run tests
+        run: PUSH2TOK_TEST_BINARY=1 uv run --locked python -m unittest discover -s tests -v
+
   release:
     name: Publish to PyPI
     runs-on: ubuntu-latest
     if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-    needs: [linux, musllinux, windows, macos, sdist, test-linux]
+    needs: [linux, musllinux, windows, macos, sdist, test-linux, test-dev]
     environment:
       name: pypi
       url: https://pypi.org/project/push2tok/
